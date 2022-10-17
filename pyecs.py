@@ -40,6 +40,12 @@ class Scene:
     def get_components(self, type_:Type[T]) -> Iterable[T]:
         return tuple(self.data[type_].values())
     
+    def get_components_group(self, *types:type):
+        # Get entities common to types
+        comp_dicts:tuple[dict[int,Any]] = tuple(map(self.data.get, types))
+        entities:set[int] = reduce(and_, map(dict.keys, comp_dicts))  # type: ignore
+        return tuple(tuple(map(methodcaller('get', entity), comp_dicts)) for entity in entities)
+    
     def add_system(self, system:'Callable[[Scene],Any]'):
         """Noted that `system` should recive the `Scene` it is in as the first parameter."""
         self.systems.append(system)
@@ -86,9 +92,6 @@ class SystemGroup:
     
     def __call__(self, scene:Scene):
         for types, systems in self.systems.items():
-            # Get entities common to types
-            comp_dicts:tuple[dict[int,Any]] = tuple(map(scene.data.get, types))
-            entities:set[int] = reduce(and_, map(dict.keys, comp_dicts))  # type: ignore
-            comps = tuple(map(methodcaller('get', entity), comp_dicts) for entity in entities)
+            comps = scene.get_components_group(*types)
             for system in systems:
                 system(*comps)
