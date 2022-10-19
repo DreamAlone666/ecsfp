@@ -36,7 +36,7 @@ def test_Scene_tick():
 
 def test_SystemGroup():
     sysgroup = SystemGroup()
-    def func1(*comps:Tuple[Type1,Type2]):
+    def func1(scene, *comps:Tuple[Type1,Type2]):
         pass
 
     types1 = sysgroup._get_types(func1)
@@ -46,7 +46,7 @@ def test_SystemGroup():
     assert func1 in sysgroup.systems[types1]
 
     @sysgroup.add
-    def func2(*comps:Tuple[Type2,Type1]):
+    def func2(scene):
         pass
     assert func2 in sysgroup.systems[sysgroup._get_types(func2)]
 
@@ -60,7 +60,7 @@ def test_SystemGroup_tick():
     d = {'value': 'before_tick'}
 
     @sysgroup.add
-    def func(*comps:Tuple[int,Type1,Type2]):
+    def func(scene, *comps:Tuple[int,Type1,Type2]):
         for entity, type1, type2 in comps:
             assert entity == ent
             assert type(type1) is Type1

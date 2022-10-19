@@ -65,9 +65,9 @@ class Scene:
 class SystemGroup:
 
     def __init__(self):
-        self.systems:defaultdict[tuple[type],list[Callable]] = defaultdict(list)
+        self.systems:defaultdict[Tuple[type,...],list[Callable[[Scene],Any]]] = defaultdict(list)
 
-    def add(self, system:Callable, types:Optional[Sequence[type]]=None):
+    def add(self, system:Callable[[Scene],Any], types:Optional[Sequence[type]]=None):
         """
         Add a `system` to the group.
         
@@ -87,11 +87,14 @@ class SystemGroup:
             except ValueError:
                 continue
 
-    def _get_types(self, system:Callable) -> Tuple[type]:
-        return getattr(system, '__annotations__')['comps'].__args__
+    def _get_types(self, system:Callable) -> Tuple[type,...]:
+        try:
+            return getattr(system, '__annotations__')['comps'].__args__
+        except KeyError:
+            return ()
     
     def __call__(self, scene:Scene):
         for types, systems in self.systems.items():
             comps = scene.get_components_group(*types)
             for system in systems:
-                system(*comps)
+                system(scene, *comps)
