@@ -1,9 +1,10 @@
 from collections import defaultdict
 from functools import reduce
+from inspect import signature
 from itertools import count
 from operator import and_, methodcaller
 from typing import (Any, Callable, DefaultDict, Dict, Iterable, List, Optional,
-                    Sequence, Set, Tuple, Type, TypeVar)
+                    Sequence, Set, Tuple, Type, TypeVar, Union, cast)
 
 __all__ = [
     'Scene',
@@ -41,11 +42,13 @@ class Scene:
     def get_components(self, type_: Type[T]) -> Iterable[T]:
         return tuple(self.data[type_].values())
     
-    def get_components_group(self, *types: type):
+    def get_components_group(self, *types: type) -> Iterable[Tuple[Any, ...]]:
         # Get entities common to types
         comp_dicts: Tuple[Dict[int, Any]] = tuple(map(self.data.__getitem__, types))
         entities: Set[int] = reduce(and_, map(dict.keys, comp_dicts))
-        return tuple(tuple(map(methodcaller('__getitem__', entity), comp_dicts)) for entity in entities)
+        return tuple(
+            tuple(comp_dict[entity] for comp_dict in comp_dicts)
+            for entity in entities)
     
     def add_system(self, system: 'System'):
         """`system` should recive the `Scene` as the first parameter."""
@@ -64,39 +67,52 @@ class Scene:
             system(self)
 
 System = Callable[[Scene], Any]
+GroupSystem = Callable[[Scene, Iterable[Tuple[Any, ...]]], Any]
 
 class SystemGroup:
 
     def __init__(self):
-        self.systems: DefaultDict[Tuple[type, ...], List[System]] = defaultdict(list)
+        self.no_comps_systems: List[System] = []
+        self.systems: DefaultDict[Tuple[type, ...], List[GroupSystem]] = defaultdict(list)
 
-    def add(self, system: System, types: Optional[Sequence[type]] = None):
+    def add(self,
+            system: Union[System, GroupSystem],
+            types: Optional[Sequence[type]] = None):
         """Add a `system` to the group.
         
         If `types` is kept `None`, the annotations of `system` will be used.
         """
-        if types is None:
-            types = self._get_types(system)
-        self.systems[tuple(types)].append(system)
+        if 'comps' not in signature(system).parameters:
+            self.no_comps_systems.append(cast(System, system))
+
+        else:
+            if types is None:
+                types = self._get_types(system)
+            self.systems[tuple(types)].append(cast(GroupSystem, system))
+
         return system
     
     def destroy(self, system: Callable):
         """Try destroying a system whether it exists or not."""
-        for systems in self.systems.values():
+        if 'comps' not in signature(system).parameters:
             try:
-                systems.remove(system)
-                return
+                return self.no_comps_systems.remove(system)
             except ValueError:
-                continue
+                pass
+        
+        try:
+            self.systems[self._get_types(system)].remove(system)
+        except ValueError or KeyError:
+            pass
 
     def _get_types(self, system: Callable) -> Tuple[type, ...]:
-        try:
-            return getattr(system, '__annotations__')['comps'].__args__
-        except KeyError:
-            return ()
+        return getattr(system, '__annotations__')['comps'].__args__[0].__args__
     
     def __call__(self, scene: Scene):
+        for system in self.no_comps_systems:
+            system(scene)
+
         for types, systems in self.systems.items():
             comps = scene.get_components_group(*types)
             for system in systems:
-                system(scene, *comps)
+                system(scene, comps)

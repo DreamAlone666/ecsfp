@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Iterable, Tuple
 from pyecs import Scene, SystemGroup
 
 class Type1:
@@ -36,35 +36,42 @@ def test_Scene_tick():
 
 def test_SystemGroup():
     sysgroup = SystemGroup()
-    def func1(scene, *comps:Tuple[Type1,Type2]):
+    def groupsystem(scene, comps: Iterable[Tuple[Type1,Type2]]):
         pass
 
-    types1 = sysgroup._get_types(func1)
+    types1 = sysgroup._get_types(groupsystem)
     assert (Type1, Type2) == types1
 
-    sysgroup.add(func1, types1)
-    assert func1 in sysgroup.systems[types1]
+    sysgroup.add(groupsystem, types1)
+    assert groupsystem in sysgroup.systems[types1]
 
     @sysgroup.add
-    def func2(scene):
+    def system(scene):
         pass
-    assert func2 in sysgroup.systems[sysgroup._get_types(func2)]
+    assert system in sysgroup.no_comps_systems
 
-    sysgroup.destroy(func1)
-    assert func1 not in sysgroup.systems[types1]
+    sysgroup.destroy(groupsystem)
+    assert groupsystem not in sysgroup.systems[types1]
+    sysgroup.destroy(system)
+    assert system not in sysgroup.no_comps_systems
 
 def test_SystemGroup_tick():
     scene = Scene()
     ent = scene.add_entity(Type2(), Type1())
     sysgroup = SystemGroup()
-    d = {'value': 'before_tick'}
+    d = {'system': 'before_tick', 'groupsystem': 'before_tick'}
 
     @sysgroup.add
-    def func(scene, *comps:Tuple[int,Type1,Type2]):
+    def system(scene):
+        d['system'] = 'after_tick'
+    @sysgroup.add
+    def groupsystem(scene, comps: Iterable[Tuple[int,Type1,Type2]]):
         for entity, type1, type2 in comps:
             assert entity == ent
             assert type(type1) is Type1
             assert type(type2) is Type2
-            d['value'] = 'after_tick'
+            d['groupsystem'] = 'after_tick'
+
     sysgroup(scene)
-    assert d['value'] == 'after_tick'
+    assert d['system'] == 'after_tick'
+    assert d['groupsystem'] == 'after_tick'
