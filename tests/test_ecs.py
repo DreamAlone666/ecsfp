@@ -14,7 +14,7 @@ def test_Scene():
     ent = scene.add_entity(comp1, comp2)
     assert ent != scene.add_entity()
 
-    assert comp1 in scene.get_components(Type1)
+    assert comp1 is scene.get_component(ent, Type1)
     assert comp2 in scene.get_components(Type2)
 
     for comp in scene.get_components(Type2):

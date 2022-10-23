@@ -39,6 +39,10 @@ class Scene:
         """Try destroying a component whether it exists or not."""
         self.data[type(component)].pop(entity)
     
+    def get_component(self, entity: int, type_: Type[T]) -> T:
+        """Raise `KeyError` if component does not exist."""
+        return self.data[type_][entity]
+    
     def get_components(self, type_: Type[T]) -> Iterable[T]:
         return tuple(self.data[type_].values())
     
