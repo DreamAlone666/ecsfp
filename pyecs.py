@@ -3,8 +3,9 @@ from functools import reduce
 from inspect import signature
 from itertools import count
 from operator import and_, methodcaller
-from typing import (Any, Callable, DefaultDict, Dict, Iterable, List, Optional,
-                    Sequence, Set, Tuple, Type, TypeVar, Union, cast)
+from typing import (TYPE_CHECKING, Any, Callable, DefaultDict, Dict, Iterable,
+                    List, Optional, Sequence, Set, Tuple, Type, TypeVar, Union,
+                    cast, overload)
 
 __all__ = [
     'Scene',
@@ -12,6 +13,13 @@ __all__ = [
 ]
 
 T = TypeVar('T')
+
+if TYPE_CHECKING:
+    T1 = TypeVar('T1')
+    T2 = TypeVar('T2')
+    T3 = TypeVar('T3')
+    T4 = TypeVar('T4')
+    T5 = TypeVar('T5')
 
 class Scene:
     _entity_creator = count()
@@ -46,9 +54,21 @@ class Scene:
     def get_components(self, type_: Type[T]) -> Iterable[T]:
         return tuple(self.data[type_].values())
     
+    if TYPE_CHECKING:
+        @overload
+        def get_components_group(self, t1: Type[T1], t2: Type[T2], /) -> Iterable[Tuple[T1, T2]]: ...
+        @overload
+        def get_components_group(self, t1: Type[T1], t2: Type[T2], t3: Type[T3], /) -> Iterable[Tuple[T1, T2, T3]]: ...
+        @overload
+        def get_components_group(self, t1: Type[T1], t2: Type[T2], t3: Type[T3], t4: Type[T4], /) -> Iterable[Tuple[T1, T2, T3, T4]]: ...
+        @overload
+        def get_components_group(self, t1: Type[T1], t2: Type[T2], t3: Type[T3], t4: Type[T4], t5: Type[T5], /) -> Iterable[Tuple[T1, T2, T3, T4, T5]]: ...
+        @overload
+        def get_components_group(self, *types:type) -> Iterable[Tuple[Any, ...]]: ...
+
     def get_components_group(self, *types: type) -> Iterable[Tuple[Any, ...]]:
         # Get entities common to types
-        comp_dicts: Tuple[Dict[int, Any]] = tuple(map(self.data.__getitem__, types))
+        comp_dicts: Tuple[Dict[int, Any], ...] = tuple(map(self.data.__getitem__, types))
         entities: Set[int] = reduce(and_, map(dict.keys, comp_dicts))
         return tuple(
             tuple(comp_dict[entity] for comp_dict in comp_dicts)
