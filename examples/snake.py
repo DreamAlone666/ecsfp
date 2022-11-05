@@ -1,11 +1,14 @@
 from collections import deque
 from dataclasses import dataclass, field
-from itertools import islice, product
+from functools import partial
+from itertools import chain, islice, product
 from random import randint
-from typing import Deque
+from typing import Any, Deque, Tuple
+import pyglet
+from pyglet.shapes import Rectangle
 from pyecs import Scene
 
-class Vec2(tuple):
+class Vec2(Tuple[Any, Any]):
     def __add__(self, other) -> 'Vec2':
         return Vec2((self[0]+other[0], self[1]+other[1]))
     
@@ -20,7 +23,15 @@ class Vec2(tuple):
             return Vec2((self[0]-other[0], self[1]-other[1]))
         return Vec2((self[0]*other, self[1]*other))
 
-map_size = Vec2((10, 10))
+MAP_SIZE = Vec2((10, 10))
+UNIT_SIZE = 50
+INTERVAL = 0.6
+
+HEAD_COLOR = 255, 125, 25
+BODY_COLOR = 255, 150, 50
+FOOD_COLOR = 25, 255, 125
+
+is_over = False
 
 @dataclass
 class Unit:
@@ -34,48 +45,73 @@ class Head(Unit):
     def __post_init__(self):
         self.units = deque((self,))
 
-@dataclass
 class Body(Unit):
     pass
 
-@dataclass
 class Food(Unit):
     pass
-
-scene = Scene()
 
 def food_system(scene: Scene):
     foods = scene.get_components(Food)
     heads = scene.get_components(Head)
     for food, head in product(foods, heads):
         if food.position == head.position:
-            food.position = Vec2(randint(0, size) for size in map_size)
+            food.position = Vec2(randint(0, size-1) for size in MAP_SIZE)
 
             body = Body(head.position)
-            scene.add_entity(body)
+            scene.add_entity(body,
+                new_rect(*body.position, color=BODY_COLOR))
             head.units.appendleft(body)
 
-def move_snakes(scene: Scene):
-    for entity, head in scene.get_components_group(int, Head):
-        new_position = head.position + head.direction
+def edge_solver(num, max_):
+    if num >= max_:
+        return 0
+    if num < 0:
+        return max_ - 1
+    return num
+
+def move_system(scene: Scene):
+    for head in scene.get_components(Head):
+        new_position = Vec2(map(edge_solver, head.position + head.direction, MAP_SIZE))
         for after, before in zip(head.units, islice(head.units, 1, None)):
             after.position = before.position
             if after.position == new_position:
-                raise
+                global is_over
+                is_over = True
+
         head.position = new_position
 
-snake = scene.add_entity(Head(Vec2((0, 0))))
-for _ in range(3):
-    body = Body(Vec2((0, 0)))
-    scene.add_entity(body)
-    scene.get_component(snake, Head).units.appendleft(body)
-scene.add_entity(Food(Vec2((6, 0))))
+def render_update(scene: Scene):
+    heads = scene.get_components_group(Head, Rectangle)
+    bodies = scene.get_components_group(Body, Rectangle)
+    foods = scene.get_components_group(Food, Rectangle)
+    for unit, rect in chain(heads, bodies, foods):
+        rect.position = unit.position * UNIT_SIZE
 
-while input() == '':
-    print(f'Snake: {scene.get_component(snake, Head).position}')
-    for body in scene.get_components(Body):
-        print(body.position)
-    for food in scene.get_components(Food):
-        print(f'Food: {food.position}')
+window = pyglet.window.Window(*MAP_SIZE*UNIT_SIZE, vsync=False)
+fps = pyglet.window.FPSDisplay(window)
+batch = pyglet.graphics.Batch()
+new_rect = partial(Rectangle, width=UNIT_SIZE, height=UNIT_SIZE, batch=batch)
+
+scene = Scene()
+
+scene.add_entity(Head(Vec2((0, 0))),
+    new_rect(0, 0, color=HEAD_COLOR))
+scene.add_entity(Food(Vec2((6, 0))),
+    new_rect(6*UNIT_SIZE, 0, color=FOOD_COLOR))
+
+def game_logic(dt, scene):
+    move_system(scene)
     food_system(scene)
-    move_snakes(scene)
+    render_update(scene)
+    if is_over:
+        pyglet.clock.unschedule(game_logic)
+
+def main(dt):
+    window.clear()
+    batch.draw()
+    fps.draw()
+
+pyglet.clock.schedule(main)
+pyglet.clock.schedule_interval_soft(game_logic, INTERVAL, scene)
+pyglet.app.run()
