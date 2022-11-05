@@ -1,12 +1,15 @@
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from functools import partial
 from itertools import chain, islice, product
+from math import isclose
 from random import randint
 from typing import Any, Deque, Tuple
+
 import pyglet
 from pyglet.shapes import Rectangle
 from pyglet.window import key
+
 from pyecs import Scene
 
 class Vec2(Tuple[Any, Any]):
@@ -35,6 +38,8 @@ HEAD_COLOR = 255, 125, 25
 BODY_COLOR = 255, 150, 50
 FOOD_COLOR = 25, 255, 125
 
+ANIMATION_BEZIER = 0.25, 0, 0, 1
+
 key_settings = {key.LEFT: Vec2((-1, 0)), key.RIGHT: Vec2((1, 0)),
     key.UP: Vec2((0, 1)), key.DOWN: Vec2((0, -1))}
 is_over = False
@@ -58,6 +63,20 @@ class Body(Unit):
 class Food(Unit):
     pass
 
+@dataclass
+class KeyFrame:
+    component: Any
+    attr: str
+    start: Any
+    end: InitVar[Any]
+    bezier: Tuple[float, float, float, float]
+    duration: float
+    time: float = 0
+    delta: Any = field(init=False)
+
+    def __post_init__(self, end):
+        self.delta = end - self.start
+
 def food_system(scene: Scene):
     foods = scene.get_components(Food)
     heads = scene.get_components(Head)
@@ -66,8 +85,10 @@ def food_system(scene: Scene):
             food.position = Vec2(randint(0, size-1) for size in MAP_SIZE)
 
             body = Body(head.position)
+            rect = new_rect(*body.position*UNIT_SIZE, color=BODY_COLOR)
             scene.add_entity(body,
-                new_rect(*body.position, color=BODY_COLOR))
+                rect,
+                new_keyframe(rect))
             head.units.appendleft(body)
 
 def edge_solver(num, max_):
@@ -90,11 +111,13 @@ def move_system(scene: Scene):
         head.position = new_position
 
 def render_update(scene: Scene):
-    heads = scene.get_components_group(Head, Rectangle)
-    bodies = scene.get_components_group(Body, Rectangle)
-    foods = scene.get_components_group(Food, Rectangle)
-    for unit, rect in chain(heads, bodies, foods):
-        rect.position = unit.position * UNIT_SIZE
+    heads = scene.get_components_group(Head, Rectangle, KeyFrame)
+    bodies = scene.get_components_group(Body, Rectangle, KeyFrame)
+    foods = scene.get_components_group(Food, Rectangle, KeyFrame)
+    for unit, rect, kf in chain(heads, bodies, foods):
+        kf.start = Vec2(rect.position)
+        kf.delta = unit.position * UNIT_SIZE - rect.position
+        kf.time = 0
 
 def input_system(scene: Scene):
     try:
@@ -106,19 +129,51 @@ def input_system(scene: Scene):
         if head.direction.dot(new_direction) == 0:
             head.pre_direction = new_direction
 
+def cubic_bezier(x1: float, y1: float, x2: float, y2: float, x: float,
+        *, accuracy=0.05, left=0, right=1) -> float:
+    t = x
+    while True:
+        current_x = 3 * (1-t) * t * (x1 + (x2-x1)*t) + t**3
+        if isclose(current_x, x, rel_tol=accuracy):
+            return 3 * (1-t) * t * (y1 + (y2-y1)*t) + t**3
+        if x < current_x:
+            right = t
+            t = (left + t) / 2
+        else:
+            left = t
+            t = (right + t) / 2
+
+def keyframe_system(scene: Scene, dt: float):
+    for kf in scene.get_components(KeyFrame):
+        if kf.time < kf.duration:
+            kf.time += dt
+            setattr(kf.component, kf.attr,
+                kf.start + kf.delta * cubic_bezier(*kf.bezier, min(kf.time/kf.duration, 1)))
+
 window = pyglet.window.Window(*MAP_SIZE*UNIT_SIZE, vsync=False)
 fps = pyglet.window.FPSDisplay(window)
 keys = key.KeyStateHandler()
 window.push_handlers(keys)
 batch = pyglet.graphics.Batch()
+
 new_rect = partial(Rectangle, width=UNIT_SIZE, height=UNIT_SIZE, batch=batch)
+def new_keyframe(rect: Rectangle) -> KeyFrame:
+    return KeyFrame(rect, 'position',
+        Vec2(rect.position), Vec2(rect.position),
+        ANIMATION_BEZIER, INTERVAL, time=INTERVAL)
 
 scene = Scene()
 
-scene.add_entity(Head(Vec2((0, 0))),
-    new_rect(0, 0, color=HEAD_COLOR))
-scene.add_entity(Food(Vec2((6, 0))),
-    new_rect(6*UNIT_SIZE, 0, color=FOOD_COLOR))
+def init_game(dt, scene: Scene):
+    rect = new_rect(0, 0, color=HEAD_COLOR)
+    scene.add_entity(Head(Vec2((0, 0))),
+        rect,
+        new_keyframe(rect))
+
+    rect = new_rect(6*UNIT_SIZE, 0, color=FOOD_COLOR)
+    scene.add_entity(Food(Vec2((6, 0))),
+        rect,
+        new_keyframe(rect))
 
 def game_logic(dt, scene):
     move_system(scene)
@@ -129,10 +184,12 @@ def game_logic(dt, scene):
 
 def main(dt, scene):
     input_system(scene)
+    keyframe_system(scene, dt)
     window.clear()
     batch.draw()
     fps.draw()
 
 pyglet.clock.schedule(main, scene)
 pyglet.clock.schedule_interval_soft(game_logic, INTERVAL, scene)
+pyglet.clock.schedule_once(init_game, 0, scene)
 pyglet.app.run()
