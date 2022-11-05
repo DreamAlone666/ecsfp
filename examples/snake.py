@@ -6,6 +6,7 @@ from random import randint
 from typing import Any, Deque, Tuple
 import pyglet
 from pyglet.shapes import Rectangle
+from pyglet.window import key
 from pyecs import Scene
 
 class Vec2(Tuple[Any, Any]):
@@ -22,6 +23,9 @@ class Vec2(Tuple[Any, Any]):
         if isinstance(other, tuple):
             return Vec2((self[0]-other[0], self[1]-other[1]))
         return Vec2((self[0]*other, self[1]*other))
+    
+    def dot(self, other):
+        return self[0]*other[0] + self[1]*other[1]
 
 MAP_SIZE = Vec2((10, 10))
 UNIT_SIZE = 50
@@ -31,6 +35,8 @@ HEAD_COLOR = 255, 125, 25
 BODY_COLOR = 255, 150, 50
 FOOD_COLOR = 25, 255, 125
 
+key_settings = {key.LEFT: Vec2((-1, 0)), key.RIGHT: Vec2((1, 0)),
+    key.UP: Vec2((0, 1)), key.DOWN: Vec2((0, -1))}
 is_over = False
 
 @dataclass
@@ -40,6 +46,7 @@ class Unit:
 @dataclass
 class Head(Unit):
     direction: Vec2 = Vec2((1, 0))
+    pre_direction: Vec2 = direction
     units: Deque[Unit] = field(init=False)
 
     def __post_init__(self):
@@ -72,6 +79,7 @@ def edge_solver(num, max_):
 
 def move_system(scene: Scene):
     for head in scene.get_components(Head):
+        head.direction = head.pre_direction
         new_position = Vec2(map(edge_solver, head.position + head.direction, MAP_SIZE))
         for after, before in zip(head.units, islice(head.units, 1, None)):
             after.position = before.position
@@ -88,8 +96,20 @@ def render_update(scene: Scene):
     for unit, rect in chain(heads, bodies, foods):
         rect.position = unit.position * UNIT_SIZE
 
+def input_system(scene: Scene):
+    try:
+        new_direction = next(key_settings[key_] for key_ in key_settings if keys[key_])
+    except StopIteration:
+        return
+    
+    for head in scene.get_components(Head):
+        if head.direction.dot(new_direction) == 0:
+            head.pre_direction = new_direction
+
 window = pyglet.window.Window(*MAP_SIZE*UNIT_SIZE, vsync=False)
 fps = pyglet.window.FPSDisplay(window)
+keys = key.KeyStateHandler()
+window.push_handlers(keys)
 batch = pyglet.graphics.Batch()
 new_rect = partial(Rectangle, width=UNIT_SIZE, height=UNIT_SIZE, batch=batch)
 
@@ -107,11 +127,12 @@ def game_logic(dt, scene):
     if is_over:
         pyglet.clock.unschedule(game_logic)
 
-def main(dt):
+def main(dt, scene):
+    input_system(scene)
     window.clear()
     batch.draw()
     fps.draw()
 
-pyglet.clock.schedule(main)
+pyglet.clock.schedule(main, scene)
 pyglet.clock.schedule_interval_soft(game_logic, INTERVAL, scene)
 pyglet.app.run()
