@@ -9,7 +9,6 @@ from typing import (TYPE_CHECKING, Any, Callable, DefaultDict, Dict, Iterable,
 
 __all__ = [
     'Scene',
-    'SystemGroup',
 ]
 
 T = TypeVar('T')
@@ -91,52 +90,3 @@ class Scene:
             system(self)
 
 System = Callable[[Scene], Any]
-GroupSystem = Callable[[Scene, Iterable[Tuple[Any, ...]]], Any]
-
-class SystemGroup:
-
-    def __init__(self):
-        self.no_comps_systems: List[System] = []
-        self.systems: DefaultDict[Tuple[type, ...], List[GroupSystem]] = defaultdict(list)
-
-    def add(self,
-            system: Union[System, GroupSystem],
-            types: Optional[Sequence[type]] = None):
-        """Add a `system` to the group.
-        
-        If `types` is kept `None`, the annotations of `system` will be used.
-        """
-        if 'comps' not in signature(system).parameters:
-            self.no_comps_systems.append(cast(System, system))
-
-        else:
-            if types is None:
-                types = self._get_types(system)
-            self.systems[tuple(types)].append(cast(GroupSystem, system))
-
-        return system
-    
-    def destroy(self, system: Callable):
-        """Try destroying a system whether it exists or not."""
-        if 'comps' not in signature(system).parameters:
-            try:
-                return self.no_comps_systems.remove(system)
-            except ValueError:
-                pass
-        
-        try:
-            self.systems[self._get_types(system)].remove(system)
-        except ValueError or KeyError:
-            pass
-
-    def _get_types(self, system: Callable) -> Tuple[type, ...]:
-        return getattr(system, '__annotations__')['comps'].__args__[0].__args__
-    
-    def __call__(self, scene: Scene):
-        for system in self.no_comps_systems:
-            system(scene)
-
-        for types, systems in self.systems.items():
-            comps = scene.get_components_group(*types)
-            for system in systems:
-                system(scene, comps)
