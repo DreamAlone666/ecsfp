@@ -1,4 +1,4 @@
-from pyecs import Scene
+from pyecs import Scene, SystemList
 
 class Type1:
     pass
@@ -23,12 +23,13 @@ def test_Scene():
     scene.destroy_entity(ent)
     assert comp1 not in scene.get_components(Type1)
 
-def test_Scene_tick():
+def test_SystemList():
     scene = Scene()
-    d = {'value': 'before_tick'}
-    def func(scene):
-        d['value'] = 'after_tick'
+    d = 0
+    def func(scene: Scene):
+        nonlocal d
+        d = 1
+    syslist = SystemList((func,))
     
-    scene.add_system(func)
-    scene.tick()
-    assert d['value'] == 'after_tick'
+    syslist(scene)
+    assert d == 1

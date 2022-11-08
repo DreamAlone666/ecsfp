@@ -1,14 +1,13 @@
 from collections import defaultdict
 from functools import reduce
-from inspect import signature
 from itertools import count
-from operator import and_, methodcaller
+from operator import and_
 from typing import (TYPE_CHECKING, Any, Callable, DefaultDict, Dict, Iterable,
-                    List, Optional, Sequence, Set, Tuple, Type, TypeVar, Union,
-                    cast, overload)
+                    List, Set, Tuple, Type, TypeVar, overload)
 
 __all__ = [
     'Scene',
+    'SystemList',
 ]
 
 T = TypeVar('T')
@@ -25,7 +24,6 @@ class Scene:
     
     def __init__(self):
         self.data: DefaultDict[type, Dict[int, Any]] = defaultdict(dict)
-        self.systems: List[System] = []
     
     def add_entity(self, *components) -> int:
         ent = next(self._entity_creator)
@@ -72,21 +70,11 @@ class Scene:
         return tuple(
             tuple(comp_dict[entity] for comp_dict in comp_dicts)
             for entity in entities)
-    
-    def add_system(self, system: 'System'):
-        """`system` should recive the `Scene` as the first parameter."""
-        self.systems.append(system)
 
-    def destroy_system(self, system: Callable):
-        """Try destroying a system whether it exists or not."""
-        try:
-            self.systems.remove(system)
-        except ValueError:
-            return
-    
-    def tick(self):
+Sys_T = TypeVar('Sys_T', bound=Callable[..., Any])
+
+class SystemList(List[Sys_T]):
+    def __call__(self, *args: Any, **kwargs: Any) -> None:
         """Call all the systems."""
-        for system in self.systems.copy():
-            system(self)
-
-System = Callable[[Scene], Any]
+        for system in self:
+            system(*args, **kwargs)
