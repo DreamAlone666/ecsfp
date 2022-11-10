@@ -111,9 +111,9 @@ def move_system(scene: Scene):
         head.position = new_position
 
 def render_update(scene: Scene):
-    heads = scene.get_components_group(Head, Rectangle, KeyFrame)
-    bodies = scene.get_components_group(Body, Rectangle, KeyFrame)
-    foods = scene.get_components_group(Food, Rectangle, KeyFrame)
+    heads = scene.match_components(Head, Rectangle, KeyFrame)
+    bodies = scene.match_components(Body, Rectangle, KeyFrame)
+    foods = scene.match_components(Food, Rectangle, KeyFrame)
     for unit, rect, kf in chain(heads, bodies, foods):
         kf.start = Vec2(rect.position)
         kf.delta = unit.position * UNIT_SIZE - rect.position

@@ -23,6 +23,20 @@ def test_Scene():
     scene.destroy_entity(ent)
     assert comp1 not in scene.get_components(Type1)
 
+def test_Scene_match():
+    scene = Scene()
+    ent_to_comps = {}
+    for _ in range(10):
+        scene.add_entity(Type1())
+        scene.add_entity(Type2())
+        comps = Type1(), Type2()
+        ent_to_comps[scene.add_entity(*comps)] = comps
+    
+    assert {(ent, *comp) for ent, comp in ent_to_comps.items()}\
+        == set(scene.match_components(int, Type1, Type2))
+    
+    assert set(ent_to_comps.keys()) == scene.match_entities(Type1, Type2)
+
 def test_SystemList():
     scene = Scene()
     d = 0
