@@ -1,7 +1,7 @@
 from collections import deque
 from dataclasses import InitVar, dataclass, field
 from functools import partial
-from itertools import chain, islice, product
+from itertools import islice, product
 from math import isclose
 from random import randint
 from typing import Any, Deque, Tuple
@@ -49,22 +49,20 @@ class Unit:
     position: Vec2
 
 @dataclass
-class Head(Unit):
+class Head():
+    unit: InitVar[Unit]
     direction: Vec2 = Vec2((1, 0))
     pre_direction: Vec2 = direction
     units: Deque[Unit] = field(init=False)
 
-    def __post_init__(self):
-        self.units = deque((self,))
+    def __post_init__(self, unit):
+        self.units = deque((unit,))
 
-class Body(Unit):
-    pass
-
-class Food(Unit):
+class Food():
     pass
 
 @dataclass
-class KeyFrame:
+class Tween:
     component: Any
     attr: str
     start: Any
@@ -78,18 +76,18 @@ class KeyFrame:
         self.delta = end - self.start
 
 def food_system(scene: Scene):
-    foods = scene.get_components(Food)
-    heads = scene.get_components(Head)
-    for food, head in product(foods, heads):
-        if food.position == head.position:
-            food.position = Vec2(randint(0, size-1) for size in MAP_SIZE)
+    foods = scene.match_components(Unit, Food)
+    heads = scene.match_components(Unit, Head)
+    for (food_unit, _), (head_unit, head) in product(foods, heads):
+        if food_unit.position == head_unit.position:
+            food_unit.position = Vec2(randint(0, size-1) for size in MAP_SIZE)
 
-            body = Body(head.position)
-            rect = new_rect(*body.position*UNIT_SIZE, color=BODY_COLOR)
-            scene.add_entity(body,
+            unit = Unit(head_unit.position)
+            rect = new_rect(*unit.position*UNIT_SIZE, color=BODY_COLOR)
+            scene.add_entity(unit,
                 rect,
-                new_keyframe(rect))
-            head.units.appendleft(body)
+                new_tween(rect))
+            head.units.appendleft(unit)
 
 def edge_solver(num, max_):
     if num >= max_:
@@ -99,25 +97,22 @@ def edge_solver(num, max_):
     return num
 
 def move_system(scene: Scene):
-    for head in scene.get_components(Head):
+    for head_unit, head in scene.match_components(Unit, Head):
         head.direction = head.pre_direction
-        new_position = Vec2(map(edge_solver, head.position + head.direction, MAP_SIZE))
+        new_position = Vec2(map(edge_solver, head_unit.position + head.direction, MAP_SIZE))
         for after, before in zip(head.units, islice(head.units, 1, None)):
             after.position = before.position
             if after.position == new_position:
                 global is_over
                 is_over = True
 
-        head.position = new_position
+        head_unit.position = new_position
 
 def render_update(scene: Scene):
-    heads = scene.match_components(Head, Rectangle, KeyFrame)
-    bodies = scene.match_components(Body, Rectangle, KeyFrame)
-    foods = scene.match_components(Food, Rectangle, KeyFrame)
-    for unit, rect, kf in chain(heads, bodies, foods):
-        kf.start = Vec2(rect.position)
-        kf.delta = unit.position * UNIT_SIZE - rect.position
-        kf.time = 0
+    for unit, rect, tween in scene.match_components(Unit, Rectangle, Tween):
+        tween.start = Vec2(rect.position)
+        tween.delta = unit.position * UNIT_SIZE - rect.position
+        tween.time = 0
 
 def input_system(scene: Scene):
     try:
@@ -143,12 +138,12 @@ def cubic_bezier(x1: float, y1: float, x2: float, y2: float, x: float,
             left = t
             t = (right + t) / 2
 
-def keyframe_system(scene: Scene, dt: float):
-    for kf in scene.get_components(KeyFrame):
-        if kf.time < kf.duration:
-            kf.time += dt
-            setattr(kf.component, kf.attr,
-                kf.start + kf.delta * cubic_bezier(*kf.bezier, min(kf.time/kf.duration, 1)))
+def tween_system(scene: Scene, dt: float):
+    for tween in scene.get_components(Tween):
+        if tween.time < tween.duration:
+            tween.time += dt
+            setattr(tween.component, tween.attr,
+                tween.start + tween.delta * cubic_bezier(*tween.bezier, min(tween.time/tween.duration, 1)))
 
 window = pyglet.window.Window(*MAP_SIZE*UNIT_SIZE, vsync=False)
 fps = pyglet.window.FPSDisplay(window)
@@ -157,23 +152,26 @@ window.push_handlers(keys)
 batch = pyglet.graphics.Batch()
 
 new_rect = partial(Rectangle, width=UNIT_SIZE, height=UNIT_SIZE, batch=batch)
-def new_keyframe(rect: Rectangle) -> KeyFrame:
-    return KeyFrame(rect, 'position',
+def new_tween(rect: Rectangle) -> Tween:
+    return Tween(rect, 'position',
         Vec2(rect.position), Vec2(rect.position),
         ANIMATION_BEZIER, INTERVAL, time=INTERVAL)
 
 scene = Scene()
 
 def init_game(dt, scene: Scene):
-    rect = new_rect(0, 0, color=HEAD_COLOR)
-    scene.add_entity(Head(Vec2((0, 0))),
+    unit = Unit(Vec2((0, 0)))
+    rect = new_rect(*unit.position, color=HEAD_COLOR)
+    scene.add_entity(unit,
+        Head(unit),
         rect,
-        new_keyframe(rect))
+        new_tween(rect))
 
     rect = new_rect(6*UNIT_SIZE, 0, color=FOOD_COLOR)
-    scene.add_entity(Food(Vec2((6, 0))),
+    scene.add_entity(Unit(Vec2((6, 0))),
+        Food(),
         rect,
-        new_keyframe(rect))
+        new_tween(rect))
 
 def game_logic(dt, scene):
     move_system(scene)
@@ -184,7 +182,7 @@ def game_logic(dt, scene):
 
 def main(dt, scene):
     input_system(scene)
-    keyframe_system(scene, dt)
+    tween_system(scene, dt)
     window.clear()
     batch.draw()
     fps.draw()
