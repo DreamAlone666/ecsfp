@@ -34,8 +34,8 @@ MAP_SIZE = Vec2((10, 10))
 UNIT_SIZE = 50
 INTERVAL = 0.6
 
-HEAD_COLOR = 255, 125, 25
-BODY_COLOR = 255, 150, 50
+HEAD_COLOR = 255, 40, 40
+BODY_COLOR = 255, 75, 75
 FOOD_COLOR = 25, 255, 125
 
 ANIMATION_BEZIER = 0.25, 0, 0, 1
@@ -125,7 +125,7 @@ def input_system(scene: Scene):
             head.pre_direction = new_direction
 
 def cubic_bezier(x1: float, y1: float, x2: float, y2: float, x: float,
-        *, accuracy=0.05, left=0, right=1) -> float:
+        *, accuracy=0.01, left=0, right=1) -> float:
     t = x
     while True:
         current_x = 3 * (1-t) * t * (x1 + (x2-x1)*t) + t**3
@@ -145,7 +145,7 @@ def tween_system(scene: Scene, dt: float):
             setattr(tween.component, tween.attr,
                 tween.start + tween.delta * cubic_bezier(*tween.bezier, min(tween.time/tween.duration, 1)))
 
-window = pyglet.window.Window(*MAP_SIZE*UNIT_SIZE, vsync=False)
+window = pyglet.window.Window(*MAP_SIZE*UNIT_SIZE)
 fps = pyglet.window.FPSDisplay(window)
 keys = key.KeyStateHandler()
 window.push_handlers(keys)
@@ -157,7 +157,11 @@ def new_tween(rect: Rectangle) -> Tween:
         Vec2(rect.position), Vec2(rect.position),
         ANIMATION_BEZIER, INTERVAL, time=INTERVAL)
 
-scene = Scene()
+over_label = pyglet.text.Label('Game Over',
+                          font_size=min(window.width//8, 150),
+                          x=window.width//2, y=window.height//2,
+                          anchor_x='center', anchor_y='center')
+over_label.visible = False
 
 def init_game(dt, scene: Scene):
     unit = Unit(Vec2((0, 0)))
@@ -179,15 +183,21 @@ def game_logic(dt, scene):
     render_update(scene)
     if is_over:
         pyglet.clock.unschedule(game_logic)
+        def set_font_visible(dt): over_label.visible = True
+        pyglet.clock.schedule_once(set_font_visible, INTERVAL+1)
 
 def main(dt, scene):
     input_system(scene)
     tween_system(scene, dt)
     window.clear()
     batch.draw()
+    if is_over:
+        over_label.draw()
     fps.draw()
 
-pyglet.clock.schedule(main, scene)
+scene = Scene()
+
+pyglet.clock.schedule_interval_soft(main, 1/120, scene)
 pyglet.clock.schedule_interval_soft(game_logic, INTERVAL, scene)
 pyglet.clock.schedule_once(init_game, 0, scene)
 pyglet.app.run()
