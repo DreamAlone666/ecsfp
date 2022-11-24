@@ -15,6 +15,7 @@ def test_Scene():
 
     assert comp1 is scene.get_component(ent, Type1)
     assert comp2 in scene.get_components(Type2)
+    assert scene.has_component(ent, Type1) and scene.has_component(ent, Type2)
 
     for comp in scene.get_components(Type2):
         scene.destroy_component(ent, comp)
@@ -22,6 +23,7 @@ def test_Scene():
 
     scene.destroy_entity(ent)
     assert comp1 not in scene.get_components(Type1)
+    assert not (scene.has_component(ent, Type1) and scene.has_component(ent, Type2))
 
 def test_Scene_match():
     scene = Scene()

@@ -25,15 +25,15 @@ class Scene:
     def __init__(self):
         self.data: DefaultDict[type, Dict[int, Any]] = defaultdict(dict)
     
-    def add_entity(self, *components) -> int:
-        """With the given `components`."""
+    def add_entity(self, *components: Any) -> int:
+        """Also calls `add_component` to add the given `components`."""
         ent = next(self._entity_creator)
         self.data[int][ent] = ent
         for comp in components:
             self.add_component(ent, comp)
         return ent
     
-    def add_component(self, entity: int, component):
+    def add_component(self, entity: int, component: Any):
         """The existing component of the same type will be replaced."""
         self.data[type(component)][entity] = component
     
@@ -42,7 +42,7 @@ class Scene:
         for objs in self.data.values():
             objs.pop(entity, None)
     
-    def destroy_component(self, entity: int, component):
+    def destroy_component(self, entity: int, component: Any):
         """Try destroying `component` whether it exists or not."""
         self.data[type(component)].pop(entity)
     
@@ -53,6 +53,9 @@ class Scene:
     def get_components(self, type_: Type[T]) -> Iterable[T]:
         return tuple(self.data[type_].values())
     
+    def has_component(self, entity: int, type_: type) -> bool:
+        return entity in self.data[type_]
+
     if TYPE_CHECKING:
         @overload
         def match_components(self, t1: Type[T1], t2: Type[T2], /) -> Iterable[Tuple[T1, T2]]: ...
