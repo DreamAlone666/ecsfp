@@ -19,7 +19,7 @@
 
 ```shell
 git clone https://github.com/DreamAlone666/ecsfp.git
-pip install .
+pip install ecsfp
 ```
 
 ## 设计

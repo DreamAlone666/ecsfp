@@ -19,7 +19,7 @@ It can also be installed as a package via the source code:
 
 ```shell
 git clone https://github.com/DreamAlone666/ecsfp.git
-pip install .
+pip install ecsfp
 ```
 
 ## Design
