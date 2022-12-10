@@ -10,7 +10,7 @@ import pyglet
 from pyglet.shapes import Rectangle
 from pyglet.window import key
 
-from pyecs import Scene
+from ecsfp import Scene
 
 class Vec2(Tuple[Any, Any]):
     def __add__(self, other) -> 'Vec2':

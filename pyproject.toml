@@ -1,0 +1,14 @@
+[project]
+name = "ecsfp"
+version = "0.1"
+authors = [
+  { name="DreamAlone", email="DAlone666@163.com" },
+]
+description = "ECS(Entity-Component-System) for Python, simple and flexible"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]

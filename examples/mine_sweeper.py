@@ -2,7 +2,7 @@ from itertools import product, repeat
 from random import shuffle
 from typing import List
 
-from pyecs import Scene
+from ecsfp import Scene
 
 SIZE = 9, 9
 MINE_NUM = 9

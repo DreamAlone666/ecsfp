@@ -1,4 +1,4 @@
-from pyecs import Scene, SystemList
+from ecsfp import Scene, SystemList
 
 class Type1:
     pass
